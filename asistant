@@ -1,0 +1,60 @@
+import sqlite3
+import telebot
+
+# Инициализация бота
+bot = telebot.TeleBot('')
+
+user_nicks = {}
+# Установка соединения с базой данных
+con = sqlite3.connect('bot.db', check_same_thread=False)
+cur = con.cursor()
+
+# Создание таблицы, если она не существует
+cur.execute('''CREATE TABLE IF NOT EXISTS user_nicks
+               (id INTEGER PRIMARY KEY, user TEXT, nick TEXT) ''')
+
+
+def add_nick(user, nick):
+    # Добавление ника в базу данных
+    cur.execute("INSERT INTO user_nicks(user, nick) VALUES (?, ?)", (user, nick))
+    con.commit()
+
+
+# Обработчик входящих сообщений
+@bot.message_handler(func=lambda message: True )
+
+def handle_message(message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_first_name = message.from_user.first_name
+    # Проверяем, есть ли пользователь в базе данных
+    cur.execute("SELECT * FROM user_nicks WHERE user=?", (user_id,))
+    user_record = cur.fetchone()
+
+    if user_record is None:
+        # Если пользователя нет в базе данных, запрашиваем ник и добавляем его
+        if user_id not in user_nicks:
+            bot.send_message(chat_id, "Привет! Пожалуйста, введите ваш игровой ник:")
+            user_nicks[user_id] = None
+        elif user_nicks[user_id] is None:
+            nick = message.text
+            user_nicks[user_id] = nick
+            add_nick(user_id, nick)  # Вызов функции для добавления ника в базу данных
+
+            bot.send_message(chat_id, f"Ваш ник {nick} успешно добавлен и привязан к вашему ID!")
+            # Отправка сообщения в групповой чат с упоминанием пользователя и его ника
+            bot.send_message(chat_id, f"Пользователь {user_first_name} теперь известен как {nick}")
+
+    else:
+
+        nick = user_record[2]
+        # Если пользователь уже есть в базе данных, отправляем ему сообщение
+
+
+
+        bot_info = await bot.get_me()
+        bot_name = bot_info.first_name
+        bot.send_message(chat_id, f"{bot_name}: {nick}:")
+
+# Запуск бота с непрерывным получением обновлений
+bot.infinity_polling()
